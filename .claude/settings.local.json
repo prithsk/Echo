@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(./venv/Scripts/pip install *)",
+      "Bash(./venv/Scripts/python -c ' *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://127.0.0.1:8000/openapi.json)",
+      "Bash(python -c \"import sys,json; paths=json.load\\(sys.stdin\\)['paths']; print\\([p for p in paths if 'feedback' in p or 'reflect' in p]\\)\")",
+      "Bash(curl *)",
+      "Bash(venv/Scripts/pip.exe install *)",
+      "Bash(venv/Scripts/pip-audit.exe)",
+      "Bash(venv/Scripts/pip-audit.exe --desc)",
+      "Bash(python *)",
+      "Bash(venv/Scripts/python.exe -c \"import main; print\\('OK'\\)\")",
+      "Bash(venv/Scripts/python.exe -c ' *)"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Env files
+.env
+
+# Node
+node_modules/
+
+# OS junk
+.DS_Store
