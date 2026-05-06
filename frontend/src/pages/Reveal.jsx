@@ -65,10 +65,9 @@ export default function Reveal() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '24px',
+      padding: '24px 24px 64px',
       position: 'relative',
       zIndex: 1,
-      overflow: 'hidden',
     }}>
       <GPUParticles />
       <AnimatePresence mode="wait">

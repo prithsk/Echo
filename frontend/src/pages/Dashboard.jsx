@@ -324,7 +324,7 @@ export default function Dashboard() {
 
   function copyUsername() {
     const handle = user?.username ? `@${user.username}` : userId
-    navigator.clipboard.writeText(handle)
+    navigator.clipboard.writeText(handle).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 2200)
   }
@@ -710,7 +710,7 @@ function DateCard({ item, userId, index }) {
   const tilt = useTilt(3)
   const outcome = item.outcome ? OUTCOME_CFG[item.outcome] : null
   const status = STATUS_CFG[item.status] || STATUS_CFG.scheduled
-  const canReflect = item.status === 'awaiting_reflections' || item.status === 'scheduled'
+  const canReflect = !item.has_reflected && (item.status === 'awaiting_reflections' || item.status === 'scheduled')
   const canReveal = item.status === 'revealed'
   const av = avatarPalette(item.match_name)
   const dateStr = new Date(item.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })

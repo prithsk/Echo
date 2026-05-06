@@ -56,7 +56,28 @@ _REFLECTION_PROMPTS = [
 import random as _random
 
 def generate_reflection_prompt(user_name: str, match_name: str, location: Optional[str] = None) -> str:
-    return _random.choice(_REFLECTION_PROMPTS)
+    location_ctx = f" at {location}" if location else ""
+    try:
+        message = _client().messages.create(
+            model=MODEL,
+            max_tokens=80,
+            system=(
+                "You write a single introspective reflection question for someone who just went on a date. "
+                "Be specific to this person and this date — mention their match's name and the location if given. "
+                "Warm, personal, honest. Not generic. One sentence. End with a question mark. "
+                "Return only the question, no preamble, no quotes."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"{user_name} just went on a date with {match_name}{location_ctx}. "
+                    "Write one personal reflection question for them about this specific date."
+                ),
+            }],
+        )
+        return message.content[0].text.strip()
+    except Exception:
+        return _random.choice(_REFLECTION_PROMPTS)
 
 
 def generate_outcome_message(
@@ -106,9 +127,18 @@ def generate_next_step(
     user1_name: str,
     user2_name: str,
     location: Optional[str] = None,
+    user1_notes: Optional[str] = None,
+    user2_notes: Optional[str] = None,
 ) -> str:
-    """Job 4 (mutual only): Suggest a specific, warm next step for the pair."""
-    context = f"Their date was at {location}. " if location else ""
+    """Job 4 (mutual only): Suggest a specific next step grounded in what they actually wrote."""
+    context_parts = []
+    if location:
+        context_parts.append(f"Their date was at {location}.")
+    if user1_notes:
+        context_parts.append(f"{user1_name} wrote: \"{user1_notes}\"")
+    if user2_notes:
+        context_parts.append(f"{user2_name} wrote: \"{user2_notes}\"")
+    context = " ".join(context_parts)
     try:
         message = _client().messages.create(
             model=MODEL,
@@ -116,24 +146,24 @@ def generate_next_step(
             system=(
                 "You write one concrete next-step suggestion for two people who mutually liked each other "
                 "on a dating app called Echo. "
-                "It should feel personal and warm — like advice from a close friend, not a bot. "
-                "Be specific: suggest an activity, a place type, or a conversation topic. "
-                "Under 25 words. Return only the suggestion, no preamble, no quotes."
+                "Read their reflection notes carefully. Build your suggestion on something specific they actually "
+                "mentioned — a place, a topic, an interest, a feeling. "
+                "If they mentioned something specific, reference it directly. "
+                "Feel like advice from a close friend who read what they wrote, not a generic suggestion. "
+                "Under 30 words. Return only the suggestion, no preamble, no quotes."
             ),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"{user1_name} and {user2_name} both want to see each other again. "
-                        f"{context}"
-                        "What's one specific, warm suggestion for their next move?"
-                    ),
-                }
-            ],
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"{user1_name} and {user2_name} both want to see each other again. "
+                    f"{context} "
+                    "What's one specific suggestion for their next move?"
+                ),
+            }],
         )
         return message.content[0].text.strip()
     except Exception:
-        return f"Pick a spot neither of you has been to — somewhere new gives you both something to discover together."
+        return "Pick a spot neither of you has been to — somewhere new gives you both something to discover together."
 
 
 def infer_preference_update(

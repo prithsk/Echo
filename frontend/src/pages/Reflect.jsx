@@ -31,7 +31,11 @@ export default function Reflect() {
         setAiPrompt(prompt)
         setStep('prompt')
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err.status === 403 || err.status === 404) {
+          nav('/')
+          return
+        }
         setAiPrompt('How did the date make you feel overall?')
         setStep('prompt')
       })

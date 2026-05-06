@@ -309,6 +309,8 @@ def _trigger_reveal(date: models.Date, reflections: list, db: Session):
             user1_name=date.user1.name,
             user2_name=date.user2.name,
             location=date.location,
+            user1_notes=r1.notes,
+            user2_notes=r2.notes,
         )
 
     reveal = models.Reveal(
@@ -372,6 +374,12 @@ def get_user_history(
         .all()
     )
 
+    reflected_date_ids = {
+        r.date_id for r in db.query(models.Reflection.date_id)
+        .filter(models.Reflection.user_id == current_user.id)
+        .all()
+    }
+
     history = []
     for date in all_dates:
         match_id = date.user2_id if date.user1_id == current_user.id else date.user1_id
@@ -382,6 +390,7 @@ def get_user_history(
             "scheduled_at": date.scheduled_at.isoformat(),
             "location": date.location,
             "status": date.status.value,
+            "has_reflected": date.id in reflected_date_ids,
             "outcome": date.reveal.outcome.value if date.reveal else None,
             "outcome_message": date.reveal.outcome_message if date.reveal else None,
         }
