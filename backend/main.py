@@ -1,19 +1,27 @@
 import re
+import logging
 from dotenv import load_dotenv
 load_dotenv()  # must be first — loads .env before any os.environ reads
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 
 import models
 import schemas
 import claude_client
 from database import engine, get_db
 from auth import (
-    hash_password, verify_password, create_access_token, get_current_user
+    hash_password, verify_password, set_auth_cookie, clear_auth_cookie, get_current_user
 )
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -30,14 +38,29 @@ with engine.connect() as _conn:
         except Exception:
             pass  # column already exists
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Echo API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -46,8 +69,9 @@ app.add_middleware(
 _USERNAME_RE = re.compile(r'^[a-z0-9_]{3,20}$')
 
 
-@app.post("/auth/register", response_model=schemas.Token, status_code=201)
-def register(body: schemas.UserRegister, db: Session = Depends(get_db)):
+@app.post("/auth/register", response_model=schemas.AuthResponse, status_code=201)
+@limiter.limit("5/minute")
+def register(request: Request, body: schemas.UserRegister, response: Response, db: Session = Depends(get_db)):
     username = body.username.lower().lstrip("@").strip()
     if not _USERNAME_RE.match(username):
         raise HTTPException(
@@ -65,29 +89,27 @@ def register(body: schemas.UserRegister, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_access_token(user.id)
-    return schemas.Token(
-        access_token=token, user_id=user.id,
-        username=user.username, name=user.name,
-    )
+    set_auth_cookie(response, user.id)
+    return schemas.AuthResponse(user_id=user.id, username=user.username, name=user.name)
 
 
-@app.post("/auth/login", response_model=schemas.Token)
-def login(body: schemas.UserLogin, db: Session = Depends(get_db)):
+@app.post("/auth/login", response_model=schemas.AuthResponse)
+@limiter.limit("10/minute")
+def login(request: Request, body: schemas.UserLogin, response: Response, db: Session = Depends(get_db)):
     username = body.username.lower().lstrip("@").strip()
     user = db.query(models.User).filter(models.User.username == username).first()
-    # Constant-time failure prevents username enumeration
     if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
         )
-    token = create_access_token(user.id)
-    return schemas.Token(
-        access_token=token, user_id=user.id,
-        username=user.username, name=user.name,
-    )
+    set_auth_cookie(response, user.id)
+    return schemas.AuthResponse(user_id=user.id, username=user.username, name=user.name)
+
+
+@app.post("/auth/logout", status_code=204)
+def logout(response: Response):
+    clear_auth_cookie(response)
 
 
 @app.get("/auth/me", response_model=schemas.UserOut)
@@ -97,6 +119,7 @@ def me(current_user: models.User = Depends(get_current_user)):
 
 @app.delete("/auth/account", status_code=204)
 def delete_account(
+    response: Response,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -111,6 +134,7 @@ def delete_account(
         db.query(models.Date).filter(models.Date.id.in_(date_ids)).delete(synchronize_session=False)
     db.delete(current_user)
     db.commit()
+    clear_auth_cookie(response)
 
 
 # ── Users ──────────────────────────────────────────────────────────────────

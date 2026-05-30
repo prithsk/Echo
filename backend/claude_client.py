@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Optional
 import anthropic
 from dotenv import load_dotenv
@@ -6,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MODEL = "claude-sonnet-4-6"
+logger = logging.getLogger(__name__)
 
 
 def _client() -> anthropic.Anthropic:
@@ -76,7 +78,8 @@ def generate_reflection_prompt(user_name: str, match_name: str, location: Option
             }],
         )
         return message.content[0].text.strip()
-    except Exception:
+    except Exception as e:
+        logger.error("Claude API error in generate_reflection_prompt: %s", e)
         return _random.choice(_REFLECTION_PROMPTS)
 
 
@@ -87,7 +90,6 @@ def generate_outcome_message(
     user1_rating: int,
     user2_rating: int,
 ) -> str:
-    """Job 2: Craft the reveal message both users see, tailored to the outcome."""
     fallbacks = {
         "mutual": f"Something real happened between {user1_name} and {user2_name}. You both felt it — now it's yours to explore.",
         "one_sided": "Not every connection lands the same way for both people, and that's okay. What matters is that you showed up honestly.",
@@ -119,7 +121,8 @@ def generate_outcome_message(
             ],
         )
         return message.content[0].text.strip()
-    except Exception:
+    except Exception as e:
+        logger.error("Claude API error in generate_outcome_message: %s", e)
         return fallbacks.get(outcome, fallbacks["no_interest"])
 
 
@@ -130,7 +133,6 @@ def generate_next_step(
     user1_notes: Optional[str] = None,
     user2_notes: Optional[str] = None,
 ) -> str:
-    """Job 4 (mutual only): Suggest a specific next step grounded in what they actually wrote."""
     context_parts = []
     if location:
         context_parts.append(f"Their date was at {location}.")
@@ -162,7 +164,8 @@ def generate_next_step(
             }],
         )
         return message.content[0].text.strip()
-    except Exception:
+    except Exception as e:
+        logger.error("Claude API error in generate_next_step: %s", e)
         return "Pick a spot neither of you has been to — somewhere new gives you both something to discover together."
 
 
@@ -173,7 +176,6 @@ def infer_preference_update(
     notes: Optional[str],
     would_see_again: str,
 ) -> str:
-    """Job 3: Update the user's preference profile based on this date's reflection."""
     existing = existing_summary or "No prior preference data."
     try:
         message = _client().messages.create(
@@ -199,7 +201,6 @@ def infer_preference_update(
             ],
         )
         return message.content[0].text.strip()
-    except Exception:
+    except Exception as e:
+        logger.error("Claude API error in infer_preference_update: %s", e)
         return existing_summary or ""
-
-

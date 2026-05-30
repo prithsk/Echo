@@ -329,8 +329,8 @@ export default function Dashboard() {
     setTimeout(() => setCopied(false), 2200)
   }
 
-  function handleLogout() {
-    clearAuth()
+  async function handleLogout() {
+    await api.logout()
     nav('/')
   }
 
