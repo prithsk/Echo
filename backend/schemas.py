@@ -1,16 +1,17 @@
 import re
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
-_UUID_RE = re.compile(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-)
 
 def _require_uuid(v: str) -> str:
-    if not _UUID_RE.match(v.lower()):
+    try:
+        val = UUID(v)
+    except (ValueError, AttributeError):
         raise ValueError('Invalid ID format')
-    return v.lower()
+    return str(val)
+
 
 def _strip_tags(v: str) -> str:
     """Remove HTML/script tags from free-text user input."""
@@ -25,6 +26,20 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     bio: Optional[str] = Field(None, max_length=500)
 
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        errors = []
+        if not re.search(r'[A-Z]', v):
+            errors.append('one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            errors.append('one lowercase letter')
+        if not re.search(r'\d', v):
+            errors.append('one number')
+        if errors:
+            raise ValueError(f"Password must contain at least {', '.join(errors)}")
+        return v
+
     @field_validator('name', 'bio', mode='before')
     @classmethod
     def sanitize_register_text(cls, v):
@@ -38,9 +53,7 @@ class UserLogin(BaseModel):
     password: str = Field(..., min_length=1, max_length=128)
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthResponse(BaseModel):
     user_id: str
     username: str
     name: str
@@ -175,3 +188,8 @@ class RevealOut(BaseModel):
 
 class ReflectionPromptOut(BaseModel):
     prompt: str
+
+class AuthResponse(BaseModel):
+    user_id: str
+    username: str
+    name: str
